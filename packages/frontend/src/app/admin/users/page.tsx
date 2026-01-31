@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/api'
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { showToast } from '@/lib/toast'
@@ -44,7 +46,7 @@ export default function UsersPage() {
       setError(null)
 
       // Fetch users
-      const usersResponse = await fetch('http://localhost:3001/api/users', {
+      const usersResponse = await fetch(`${API_URL}/api/users`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -57,7 +59,7 @@ export default function UsersPage() {
       const usersData = await usersResponse.json()
 
       // Fetch schemas
-      const schemasResponse = await fetch('http://localhost:3001/api/schemas', {
+      const schemasResponse = await fetch(`${API_URL}/api/schemas`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -93,7 +95,7 @@ export default function UsersPage() {
     }
 
     try {
-      const response = await fetch(`http://localhost:3001/api/users/${selectedUser.id}/assign-schema`, {
+      const response = await fetch(`${API_URL}/api/users/${selectedUser.id}/assign-schema`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/lib/toast';
+import { API_URL } from '@/lib/api';
 import { FileText, Eye, EyeOff, UserCircle, Shield } from 'lucide-react';
 
 export default function LoginPage() {
@@ -25,7 +26,7 @@ export default function LoginPage() {
 
     try {
       // Call backend login API
-      const response = await fetch('http://localhost:3001/api/auth/login', {
+      const response = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),

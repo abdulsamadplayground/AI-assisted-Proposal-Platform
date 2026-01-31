@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/api'
+
 import { useState, useEffect } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { showToast } from '@/lib/toast'
@@ -64,7 +66,7 @@ export default function ProposalReviewPage() {
       setLoading(true)
       setError(null)
 
-      const response = await fetch(`http://localhost:3001/api/proposals/${proposalId}`, {
+      const response = await fetch(`${API_URL}/api/proposals/${proposalId}`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -102,7 +104,7 @@ export default function ProposalReviewPage() {
         content: editedSections[section.id] || section.content
       }))
       
-      const response = await fetch(`http://localhost:3001/api/proposals/${proposalId}`, {
+      const response = await fetch(`${API_URL}/api/proposals/${proposalId}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
@@ -133,7 +135,7 @@ export default function ProposalReviewPage() {
     const loadingToast = showToast.loading('Regenerating section with Rule + LLM engine...')
     
     try {
-      const response = await fetch(`http://localhost:3001/api/proposals/${proposalId}/regenerate`, {
+      const response = await fetch(`${API_URL}/api/proposals/${proposalId}/regenerate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -167,7 +169,7 @@ export default function ProposalReviewPage() {
     const loadingToast = showToast.loading('Regenerating all sections with Rule + LLM engine...')
     
     try {
-      const response = await fetch(`http://localhost:3001/api/proposals/${proposalId}/regenerate`, {
+      const response = await fetch(`${API_URL}/api/proposals/${proposalId}/regenerate`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -197,7 +199,7 @@ export default function ProposalReviewPage() {
     }
     
     try {
-      const response = await fetch(`http://localhost:3001/api/proposals/${proposalId}/approve`, {
+      const response = await fetch(`${API_URL}/api/proposals/${proposalId}/approve`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -223,7 +225,7 @@ export default function ProposalReviewPage() {
     }
     
     try {
-      const response = await fetch(`http://localhost:3001/api/proposals/${proposalId}/reject`, {
+      const response = await fetch(`${API_URL}/api/proposals/${proposalId}/reject`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -247,7 +249,7 @@ export default function ProposalReviewPage() {
   const fetchVersionHistory = async () => {
     setLoadingVersions(true)
     try {
-      const response = await fetch(`http://localhost:3001/api/proposals/${proposalId}/versions`, {
+      const response = await fetch(`${API_URL}/api/proposals/${proposalId}/versions`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -273,7 +275,7 @@ export default function ProposalReviewPage() {
     const loadingToast = showToast.loading('Exporting to Word document...')
     
     try {
-      const response = await fetch(`http://localhost:3001/api/proposals/${proposalId}/export`, {
+      const response = await fetch(`${API_URL}/api/proposals/${proposalId}/export`, {
         headers: {
           'Content-Type': 'application/json',
         },

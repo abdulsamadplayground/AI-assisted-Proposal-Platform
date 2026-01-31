@@ -7,7 +7,7 @@ const express_1 = require("express");
 const proposal_service_1 = require("../services/proposal.service");
 const router = (0, express_1.Router)();
 // Authentication removed for development
-const DEFAULT_USER_ID = '1'; // Default admin user ID
+const DEFAULT_USER_ID = '00000000-0000-0000-0000-000000000001'; // Default admin user ID from seeds
 /**
  * POST /api/proposals
  * Create a new proposal
@@ -110,6 +110,34 @@ router.post('/:id/reject', async (req, res, next) => {
     try {
         const proposal = await proposal_service_1.proposalService.rejectProposal(req.params.id, DEFAULT_USER_ID, req.body.comments);
         res.json(proposal);
+    }
+    catch (error) {
+        next(error);
+    }
+});
+/**
+ * GET /api/proposals/:id/versions
+ * Get version history for a proposal
+ */
+router.get('/:id/versions', async (req, res, next) => {
+    try {
+        const versions = await proposal_service_1.proposalService.getProposalVersions(req.params.id, DEFAULT_USER_ID);
+        res.json(versions);
+    }
+    catch (error) {
+        next(error);
+    }
+});
+/**
+ * GET /api/proposals/:id/export
+ * Export proposal as Word document
+ */
+router.get('/:id/export', async (req, res, next) => {
+    try {
+        const { buffer, filename } = await proposal_service_1.proposalService.exportProposalToWord(req.params.id, DEFAULT_USER_ID);
+        res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+        res.send(buffer);
     }
     catch (error) {
         next(error);

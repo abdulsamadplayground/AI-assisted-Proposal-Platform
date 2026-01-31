@@ -1,5 +1,7 @@
 'use client';
 
+import { API_URL } from '@/lib/api';
+
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { showToast } from '@/lib/toast';
@@ -85,7 +87,7 @@ export default function SchemaDetailPage() {
   const fetchSchema = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`http://localhost:3001/api/schemas/${schemaId}`, {
+      const response = await fetch(`${API_URL}/api/schemas/${schemaId}`, {
         headers: { 'Content-Type': 'application/json' },
       });
 
@@ -111,7 +113,7 @@ export default function SchemaDetailPage() {
 
   const fetchVersions = async () => {
     try {
-      const response = await fetch(`http://localhost:3001/api/schemas/${schemaId}/versions`, {
+      const response = await fetch(`${API_URL}/api/schemas/${schemaId}/versions`, {
         headers: { 'Content-Type': 'application/json' },
       });
 
@@ -138,7 +140,7 @@ export default function SchemaDetailPage() {
     const loadingToast = showToast.loading('Saving schema...');
 
     try {
-      const response = await fetch(`http://localhost:3001/api/schemas/${schemaId}`, {
+      const response = await fetch(`${API_URL}/api/schemas/${schemaId}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -178,7 +180,7 @@ export default function SchemaDetailPage() {
     const loadingToast = showToast.loading('Deleting schema...');
 
     try {
-      const response = await fetch(`http://localhost:3001/api/schemas/${schemaId}`, {
+      const response = await fetch(`${API_URL}/api/schemas/${schemaId}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
       });

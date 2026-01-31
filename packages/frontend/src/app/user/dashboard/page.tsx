@@ -1,5 +1,7 @@
 'use client';
 
+import { API_URL } from '@/lib/api';
+
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { FileText, FilePlus, Clock } from 'lucide-react';
@@ -43,7 +45,7 @@ export default function UserDashboard() {
       setLoading(true);
       setError(null);
 
-      const response = await fetch('http://localhost:3001/api/proposals', {
+      const response = await fetch(`${API_URL}/api/proposals`, {
         headers: {
           'Content-Type': 'application/json',
         },

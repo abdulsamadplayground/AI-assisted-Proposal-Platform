@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/api'
+
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import showToast from '@/lib/toast'
@@ -246,7 +248,7 @@ export default function CreateSchemaPage() {
     }
     
     try {
-      const response = await fetch('http://localhost:3001/api/schemas', {
+      const response = await fetch(`${API_URL}/api/schemas`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

@@ -60,6 +60,21 @@ export declare class ProposalService {
     deleteProposal(proposalId: string, userId: string): Promise<{
         message: string;
     }>;
+    /**
+     * Get version history for a proposal
+     * Users can only see versions up to approved version
+     * Admins can see all versions
+     */
+    getProposalVersions(proposalId: string, userId: string): Promise<any[]>;
+    /**
+     * Export proposal as Word document
+     * Users can only export approved proposals
+     * Admins can export any approved proposal
+     */
+    exportProposalToWord(proposalId: string, userId: string): Promise<{
+        buffer: any;
+        filename: string;
+    }>;
 }
 export declare const proposalService: ProposalService;
 //# sourceMappingURL=proposal.service.d.ts.map

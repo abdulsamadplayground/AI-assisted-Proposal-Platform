@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/api'
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import showToast from '@/lib/toast'
@@ -24,7 +26,7 @@ export default function SchemasPage() {
 
   const fetchSchemas = async () => {
     try {
-      const response = await fetch('http://localhost:3001/api/schemas', {
+      const response = await fetch(`${API_URL}/api/schemas`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -50,7 +52,7 @@ export default function SchemasPage() {
     }
 
     try {
-      const response = await fetch(`http://localhost:3001/api/schemas/${schemaId}`, {
+      const response = await fetch(`${API_URL}/api/schemas/${schemaId}`, {
         method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',

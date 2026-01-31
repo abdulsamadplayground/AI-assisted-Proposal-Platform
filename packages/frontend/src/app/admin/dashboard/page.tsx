@@ -1,5 +1,7 @@
 'use client'
 
+import { API_URL } from '@/lib/api'
+
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { FileText, Clock, Users, Settings, TrendingUp, Timer, FilePlus, ClipboardList, UserPlus } from 'lucide-react'
@@ -49,7 +51,7 @@ export default function AdminDashboard() {
       setError(null)
 
       // Fetch proposals
-      const proposalsResponse = await fetch('http://localhost:3001/api/proposals', {
+      const proposalsResponse = await fetch(`${API_URL}/api/proposals`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -64,7 +66,7 @@ export default function AdminDashboard() {
       // Fetch users count
       let usersCount = 0
       try {
-        const usersResponse = await fetch('http://localhost:3001/api/users', {
+        const usersResponse = await fetch(`${API_URL}/api/users`, {
           headers: {
             'Content-Type': 'application/json',
           },
@@ -80,7 +82,7 @@ export default function AdminDashboard() {
       // Fetch schemas count
       let schemasCount = 0
       try {
-        const schemasResponse = await fetch('http://localhost:3001/api/schemas', {
+        const schemasResponse = await fetch(`${API_URL}/api/schemas`, {
           headers: {
             'Content-Type': 'application/json',
           },

@@ -1,7 +1,18 @@
 {
-  "/user/proposals/[id]/page": "app/user/proposals/[id]/page.js",
-  "/admin/proposals/page": "app/admin/proposals/page.js",
+  "/_not-found/page": "app/_not-found/page.js",
+  "/login/page": "app/login/page.js",
+  "/page": "app/page.js",
+  "/admin/dashboard/page": "app/admin/dashboard/page.js",
+  "/admin/login/page": "app/admin/login/page.js",
   "/admin/proposals/[id]/page": "app/admin/proposals/[id]/page.js",
-  "/user/proposals/page": "app/user/proposals/page.js",
-  "/user/dashboard/page": "app/user/dashboard/page.js"
+  "/admin/schemas/create/page": "app/admin/schemas/create/page.js",
+  "/admin/proposals/page": "app/admin/proposals/page.js",
+  "/admin/schemas/[id]/page": "app/admin/schemas/[id]/page.js",
+  "/admin/schemas/page": "app/admin/schemas/page.js",
+  "/admin/users/page": "app/admin/users/page.js",
+  "/admin/toast-demo/page": "app/admin/toast-demo/page.js",
+  "/user/dashboard/page": "app/user/dashboard/page.js",
+  "/user/proposals/[id]/page": "app/user/proposals/[id]/page.js",
+  "/user/proposals/create/page": "app/user/proposals/create/page.js",
+  "/user/proposals/page": "app/user/proposals/page.js"
 }

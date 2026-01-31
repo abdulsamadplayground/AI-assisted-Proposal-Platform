@@ -1,5 +1,7 @@
 'use client';
 
+import { API_URL } from '@/lib/api';
+
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { showToast } from '@/lib/toast';
@@ -36,7 +38,7 @@ export default function CreateProposalPage() {
       setSchemasLoading(true);
       setSchemasError(null);
 
-      const response = await fetch('http://localhost:3001/api/schemas', {
+      const response = await fetch(`${API_URL}/api/schemas`, {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -108,7 +110,7 @@ export default function CreateProposalPage() {
 
     try {
       // Call backend API to create proposal
-      const response = await fetch('http://localhost:3001/api/proposals', {
+      const response = await fetch(`${API_URL}/api/proposals`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

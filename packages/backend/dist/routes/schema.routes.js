@@ -75,14 +75,28 @@ router.post('/', async (req, res, next) => {
     try {
         const schemaId = (0, uuid_1.v4)();
         // Use a default user ID for development (admin user)
-        const defaultUserId = '1'; // This should be the admin user's ID from seeds
+        const defaultUserId = '00000000-0000-0000-0000-000000000001'; // Admin user from seeds
+        // Ensure sections have IDs (required by AI service)
+        const sections = req.body.sections.map((section) => ({
+            ...section,
+            id: section.id || `section-${(0, uuid_1.v4)()}`,
+            rules: (section.rules || []).map((rule) => ({
+                ...rule,
+                id: rule.id || `rule-${(0, uuid_1.v4)()}`,
+            })),
+        }));
+        // Ensure global rules have IDs
+        const globalRules = (req.body.global_rules || []).map((rule) => ({
+            ...rule,
+            id: rule.id || `rule-${(0, uuid_1.v4)()}`,
+        }));
         const schemaData = {
             id: schemaId,
             name: req.body.name,
             version: req.body.version || '1.0.0',
             description: req.body.description || '',
-            sections: JSON.stringify(req.body.sections),
-            global_rules: JSON.stringify(req.body.global_rules || []),
+            sections: JSON.stringify(sections),
+            global_rules: JSON.stringify(globalRules),
             created_by: defaultUserId,
         };
         await (0, db_1.db)('schemas').insert(schemaData);
@@ -94,6 +108,8 @@ router.post('/', async (req, res, next) => {
                 name: schema.name,
                 version: schema.version,
                 description: schema.description,
+                created_by: schema.created_by,
+                created_at: schema.created_at,
                 sections: JSON.parse(schema.sections),
                 global_rules: JSON.parse(schema.global_rules),
             });
@@ -107,6 +123,111 @@ router.post('/', async (req, res, next) => {
             sections: JSON.parse(schema.sections),
             global_rules: JSON.parse(schema.global_rules),
         });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+/**
+ * PUT /api/schemas/:id
+ * Update schema (creates new version)
+ */
+router.put('/:id', async (req, res, next) => {
+    try {
+        const schemaId = req.params.id;
+        const defaultUserId = '00000000-0000-0000-0000-000000000001';
+        // Get current schema
+        const currentSchema = await (0, db_1.db)('schemas').where({ id: schemaId }).first();
+        if (!currentSchema) {
+            throw new errorHandler_1.AppError('Schema not found', 404);
+        }
+        // Get latest version number
+        const latestVersion = await (0, db_1.db)('schema_versions')
+            .where({ schema_id: schemaId })
+            .orderBy('version_number', 'desc')
+            .first();
+        const newVersionNumber = latestVersion ? latestVersion.version_number + 1 : 1;
+        // Save current state as a version before updating
+        await (0, db_1.db)('schema_versions').insert({
+            id: (0, uuid_1.v4)(),
+            schema_id: schemaId,
+            version_number: newVersionNumber,
+            name: currentSchema.name,
+            version: currentSchema.version,
+            description: currentSchema.description,
+            sections: currentSchema.sections,
+            global_rules: currentSchema.global_rules,
+            change_summary: req.body.change_summary || 'Schema updated',
+            created_by: defaultUserId,
+        });
+        // Ensure sections have IDs (required by AI service)
+        const sections = req.body.sections.map((section) => ({
+            ...section,
+            id: section.id || `section-${(0, uuid_1.v4)()}`,
+            rules: (section.rules || []).map((rule) => ({
+                ...rule,
+                id: rule.id || `rule-${(0, uuid_1.v4)()}`,
+            })),
+        }));
+        // Ensure global rules have IDs
+        const globalRules = (req.body.global_rules || []).map((rule) => ({
+            ...rule,
+            id: rule.id || `rule-${(0, uuid_1.v4)()}`,
+        }));
+        // Update the schema
+        await (0, db_1.db)('schemas')
+            .where({ id: schemaId })
+            .update({
+            name: req.body.name,
+            version: req.body.version || currentSchema.version,
+            description: req.body.description || '',
+            sections: JSON.stringify(sections),
+            global_rules: JSON.stringify(globalRules),
+            updated_at: new Date().toISOString(),
+        });
+        const updatedSchema = await (0, db_1.db)('schemas').where({ id: schemaId }).first();
+        // Upload to AI service
+        try {
+            await ai_service_1.aiService.uploadSchema({
+                id: updatedSchema.id,
+                name: updatedSchema.name,
+                version: updatedSchema.version,
+                description: updatedSchema.description,
+                created_by: updatedSchema.created_by,
+                created_at: updatedSchema.created_at,
+                sections: JSON.parse(updatedSchema.sections),
+                global_rules: JSON.parse(updatedSchema.global_rules),
+            });
+        }
+        catch (aiError) {
+            console.error('Failed to upload schema to AI service:', aiError);
+        }
+        res.json({
+            ...updatedSchema,
+            sections: JSON.parse(updatedSchema.sections),
+            global_rules: JSON.parse(updatedSchema.global_rules),
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+/**
+ * GET /api/schemas/:id/versions
+ * Get version history for a schema
+ */
+router.get('/:id/versions', async (req, res, next) => {
+    try {
+        const versions = await (0, db_1.db)('schema_versions')
+            .where({ schema_id: req.params.id })
+            .orderBy('version_number', 'desc')
+            .select('*');
+        const parsedVersions = versions.map(version => ({
+            ...version,
+            sections: JSON.parse(version.sections),
+            global_rules: JSON.parse(version.global_rules),
+        }));
+        res.json(parsedVersions);
     }
     catch (error) {
         next(error);

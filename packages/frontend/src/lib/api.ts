@@ -13,10 +13,18 @@ export async function apiCall(endpoint: string, options: RequestInit = {}) {
   // Get token from localStorage if it exists
   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
   
-  const headers: HeadersInit = {
+  const headers: Record<string, string> = {
     'Content-Type': 'application/json',
-    ...options.headers,
   };
+  
+  // Add existing headers from options
+  if (options.headers) {
+    Object.entries(options.headers).forEach(([key, value]) => {
+      if (typeof value === 'string') {
+        headers[key] = value;
+      }
+    });
+  }
   
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;

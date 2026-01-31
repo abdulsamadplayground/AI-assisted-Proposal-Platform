@@ -161,6 +161,12 @@ class ProposalService {
             if (user.role !== 'admin' && proposal.user_id !== userId) {
                 throw new errorHandler_1.AppError('Access denied', 403);
             }
+            // Enforce status restrictions for non-admin users
+            if (user.role !== 'admin') {
+                if (proposal.status !== 'draft' && proposal.status !== 'rejected') {
+                    throw new errorHandler_1.AppError('Only draft and rejected proposals can be edited', 400);
+                }
+            }
             // Increment version
             const newVersion = proposal.current_version + 1;
             // Update proposal
@@ -205,6 +211,17 @@ class ProposalService {
         if (!proposal) {
             throw new errorHandler_1.AppError('Proposal not found', 404);
         }
+        // Check permissions
+        const user = await (0, db_1.db)('users').where({ id: userId }).first();
+        if (user.role !== 'admin' && proposal.user_id !== userId) {
+            throw new errorHandler_1.AppError('Access denied', 403);
+        }
+        // Enforce status restrictions for non-admin users
+        if (user.role !== 'admin') {
+            if (proposal.status !== 'draft' && proposal.status !== 'rejected') {
+                throw new errorHandler_1.AppError('Only draft and rejected proposals can be regenerated', 400);
+            }
+        }
         // Generate new content
         const aiRequest = {
             proposal_id: proposalId,
@@ -232,8 +249,8 @@ class ProposalService {
         if (proposal.user_id !== userId) {
             throw new errorHandler_1.AppError('Access denied', 403);
         }
-        if (proposal.status !== 'draft') {
-            throw new errorHandler_1.AppError('Only draft proposals can be submitted', 400);
+        if (proposal.status !== 'draft' && proposal.status !== 'rejected') {
+            throw new errorHandler_1.AppError('Only draft and rejected proposals can be submitted', 400);
         }
         await (0, db_1.db)('proposals')
             .where({ id: proposalId })
@@ -241,6 +258,9 @@ class ProposalService {
             status: 'pending_approval',
             submitted_at: db_1.db.fn.now(),
             updated_at: db_1.db.fn.now(),
+            admin_comments: null, // Clear previous rejection comments
+            reviewed_by: null, // Clear previous reviewer
+            reviewed_at: null, // Clear previous review date
         });
         logger_1.logger.info('Proposal submitted for approval', { proposal_id: proposalId });
         return this.getProposalById(proposalId, userId);
@@ -302,6 +322,137 @@ class ProposalService {
         await (0, db_1.db)('proposals').where({ id: proposalId }).delete();
         logger_1.logger.info('Proposal deleted', { proposal_id: proposalId });
         return { message: 'Proposal deleted successfully' };
+    }
+    /**
+     * Get version history for a proposal
+     * Users can only see versions up to approved version
+     * Admins can see all versions
+     */
+    async getProposalVersions(proposalId, userId) {
+        const proposal = await (0, db_1.db)('proposals').where({ id: proposalId }).first();
+        if (!proposal) {
+            throw new errorHandler_1.AppError('Proposal not found', 404);
+        }
+        // Check permissions
+        const user = await (0, db_1.db)('users').where({ id: userId }).first();
+        if (user.role !== 'admin' && proposal.user_id !== userId) {
+            throw new errorHandler_1.AppError('Access denied', 403);
+        }
+        // Get all versions
+        let versions = await (0, db_1.db)('proposal_versions')
+            .where({ proposal_id: proposalId })
+            .leftJoin('users', 'proposal_versions.created_by', 'users.id')
+            .select('proposal_versions.id', 'proposal_versions.version_number', 'proposal_versions.sections', 'proposal_versions.change_description', 'proposal_versions.created_at', 'users.name as created_by_name', 'users.email as created_by_email')
+            .orderBy('version_number', 'desc');
+        // For non-admin users, only show versions up to approved version
+        if (user.role !== 'admin') {
+            // Find the version when proposal was approved
+            const approvedVersion = proposal.status === 'approved' ? proposal.current_version : null;
+            if (approvedVersion) {
+                versions = versions.filter(v => v.version_number <= approvedVersion);
+            }
+        }
+        return versions.map(v => ({
+            ...v,
+            sections: JSON.parse(v.sections),
+        }));
+    }
+    /**
+     * Export proposal as Word document
+     * Users can only export approved proposals
+     * Admins can export any approved proposal
+     */
+    async exportProposalToWord(proposalId, userId) {
+        const { Document, Paragraph, TextRun, HeadingLevel, AlignmentType } = require('docx');
+        const { Packer } = require('docx');
+        const proposal = await this.getProposalById(proposalId, userId);
+        if (!proposal) {
+            throw new errorHandler_1.AppError('Proposal not found', 404);
+        }
+        // Check permissions
+        const user = await (0, db_1.db)('users').where({ id: userId }).first();
+        // Users can only export approved proposals
+        if (user.role !== 'admin' && proposal.status !== 'approved') {
+            throw new errorHandler_1.AppError('Only approved proposals can be exported', 403);
+        }
+        // Admins can export any approved proposal
+        if (user.role === 'admin' && proposal.status !== 'approved') {
+            throw new errorHandler_1.AppError('Only approved proposals can be exported', 400);
+        }
+        // Create document
+        const doc = new Document({
+            sections: [{
+                    properties: {},
+                    children: [
+                        // Title
+                        new Paragraph({
+                            text: proposal.title,
+                            heading: HeadingLevel.HEADING_1,
+                            alignment: AlignmentType.CENTER,
+                            spacing: { after: 400 },
+                        }),
+                        // Metadata
+                        new Paragraph({
+                            children: [
+                                new TextRun({ text: 'Status: ', bold: true }),
+                                new TextRun({ text: proposal.status }),
+                            ],
+                            spacing: { after: 200 },
+                        }),
+                        new Paragraph({
+                            children: [
+                                new TextRun({ text: 'Schema: ', bold: true }),
+                                new TextRun({ text: proposal.schema_name || 'N/A' }),
+                            ],
+                            spacing: { after: 200 },
+                        }),
+                        new Paragraph({
+                            children: [
+                                new TextRun({ text: 'Version: ', bold: true }),
+                                new TextRun({ text: `${proposal.current_version}` }),
+                            ],
+                            spacing: { after: 200 },
+                        }),
+                        new Paragraph({
+                            children: [
+                                new TextRun({ text: 'Created: ', bold: true }),
+                                new TextRun({ text: new Date(proposal.created_at).toLocaleDateString() }),
+                            ],
+                            spacing: { after: 400 },
+                        }),
+                        // Survey Notes (if available)
+                        ...(proposal.survey_notes ? [
+                            new Paragraph({
+                                text: 'Survey Notes',
+                                heading: HeadingLevel.HEADING_2,
+                                spacing: { before: 400, after: 200 },
+                            }),
+                            new Paragraph({
+                                text: proposal.survey_notes,
+                                spacing: { after: 400 },
+                            }),
+                        ] : []),
+                        // Sections
+                        ...proposal.sections.flatMap((section) => [
+                            new Paragraph({
+                                text: section.name,
+                                heading: HeadingLevel.HEADING_2,
+                                spacing: { before: 400, after: 200 },
+                            }),
+                            new Paragraph({
+                                text: section.content,
+                                spacing: { after: 400 },
+                            }),
+                        ]),
+                    ],
+                }],
+        });
+        // Generate buffer
+        const buffer = await Packer.toBuffer(doc);
+        // Generate filename
+        const filename = `${proposal.title.replace(/[^a-z0-9]/gi, '_')}_v${proposal.current_version}.docx`;
+        logger_1.logger.info('Proposal exported to Word', { proposal_id: proposalId, filename });
+        return { buffer, filename };
     }
 }
 exports.ProposalService = ProposalService;
