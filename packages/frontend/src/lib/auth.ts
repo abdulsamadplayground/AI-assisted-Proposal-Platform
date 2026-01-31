@@ -4,6 +4,8 @@
  * Supports separate sessions for admin and user portals
  */
 
+import API_URL from './api';
+
 export type UserRole = 'user' | 'admin';
 export type PortalType = 'admin' | 'user';
 
@@ -33,7 +35,7 @@ function getStorageKeys(portalType: PortalType) {
  * Login with email and password for specific portal
  */
 export async function login(email: string, password: string, portalType: PortalType = 'user'): Promise<User> {
-  const response = await fetch('http://localhost:3001/api/auth/login', {
+  const response = await fetch(`${API_URL}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ email, password }),
