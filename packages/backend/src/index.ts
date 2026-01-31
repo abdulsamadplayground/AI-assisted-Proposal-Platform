@@ -54,6 +54,34 @@ app.get('/health', (req, res) => {
     service: 'api-gateway',
     version: '1.0.0',
     timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    database: process.env.DB_CLIENT || 'not configured',
+  });
+});
+
+// Database status endpoint
+app.get('/api/status', (req, res) => {
+  const dbConfigured = !!(
+    process.env.DB_HOST &&
+    process.env.DB_NAME &&
+    process.env.DB_USER &&
+    process.env.DB_PASSWORD
+  );
+
+  res.json({
+    status: dbConfigured ? 'configured' : 'missing_database',
+    message: dbConfigured
+      ? 'Database is configured'
+      : 'PostgreSQL database not configured. Please add DB_HOST, DB_NAME, DB_USER, DB_PASSWORD environment variables in Vercel dashboard.',
+    database: {
+      client: process.env.DB_CLIENT || 'not set',
+      host: process.env.DB_HOST ? '***configured***' : 'not set',
+      name: process.env.DB_NAME || 'not set',
+    },
+    services: {
+      frontend: process.env.FRONTEND_URL || 'not set',
+      aiService: process.env.AI_SERVICE_URL || 'not set',
+    },
   });
 });
 
@@ -75,12 +103,15 @@ app.use((req, res) => {
 // Error handling middleware (must be last)
 app.use(errorHandler);
 
-// Start server
-app.listen(PORT, () => {
-  logger.info(`🚀 API Gateway running on http://localhost:${PORT}`);
-  logger.info(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
-  logger.info(`🔗 AI Service: ${process.env.AI_SERVICE_URL || 'http://localhost:8000'}`);
-});
+// Only start server if not in serverless environment
+if (process.env.VERCEL !== '1') {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    logger.info(`🚀 API Gateway running on http://localhost:${PORT}`);
+    logger.info(`📝 Environment: ${process.env.NODE_ENV || 'development'}`);
+    logger.info(`🔗 AI Service: ${process.env.AI_SERVICE_URL || 'http://localhost:8000'}`);
+  });
+}
 
 // Graceful shutdown
 process.on('SIGTERM', () => {

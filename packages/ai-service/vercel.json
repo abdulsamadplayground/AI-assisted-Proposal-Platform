@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "name": "ai-proposal-ai-service",
+  "builds": [
+    {
+      "src": "main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "main.py"
+    }
+  ],
+  "env": {
+    "ENVIRONMENT": "production"
+  }
+}

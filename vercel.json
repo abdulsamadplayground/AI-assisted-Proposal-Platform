@@ -1,0 +1,6 @@
+{
+  "buildCommand": "npm run vercel-build",
+  "outputDirectory": "packages/frontend/.next",
+  "installCommand": "npm install",
+  "framework": "nextjs"
+}

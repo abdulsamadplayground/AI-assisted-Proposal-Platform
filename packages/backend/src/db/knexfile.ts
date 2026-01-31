@@ -33,13 +33,20 @@ const config: { [key: string]: Knex.Config } = {
 
   production: {
     client: 'postgresql',
-    connection: {
+    connection: process.env.DB_HOST ? {
       host: process.env.DB_HOST,
       port: parseInt(process.env.DB_PORT || '5432'),
       database: process.env.DB_NAME,
       user: process.env.DB_USER,
       password: process.env.DB_PASSWORD,
       ssl: { rejectUnauthorized: false },
+    } : {
+      // Fallback to prevent crash - will fail gracefully when used
+      host: 'localhost',
+      port: 5432,
+      database: 'placeholder',
+      user: 'placeholder',
+      password: 'placeholder',
     },
     pool: {
       min: 2,

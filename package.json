@@ -1,0 +1,27 @@
+{
+  "name": "ai-proposal-platform",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:frontend": "cd packages/frontend && npm run dev",
+    "dev:backend": "cd packages/backend && npm run dev",
+    "dev:ai": "cd packages/ai-service && python main.py",
+    "build:frontend": "cd packages/frontend && npm run build",
+    "build:backend": "cd packages/backend && npm run build",
+    "start:frontend": "cd packages/frontend && npm start",
+    "start:backend": "cd packages/backend && npm start",
+    "install:all": "npm install && cd packages/frontend && npm install && cd ../backend && npm install",
+    "vercel-build": "cd packages/frontend && npm install && npm run build"
+  },
+  "dependencies": {
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
