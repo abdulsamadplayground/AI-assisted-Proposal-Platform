@@ -1,0 +1,180 @@
+PART 3: AI REASONING & GOVERNANCE
+
+Governance model ensuring AI augments human decision-making rather than replacing it
+
+Complete Analysis: See AI_GOVERNANCE_ANALYSIS.md for full details with code references
+
+================================================================================
+
+1. AI AUTHORITY
+
+Which parts should never be fully automated?
+
+Final approval decisions must remain human-controlled. Strict status workflow 
+(draft → pending_approval → approved/rejected) where only admins can approve/reject. 
+AI generates content but cannot change status or write to database—it only returns 
+sections to backend, which handles all database operations. This ensures humans 
+retain authority over official, binding documentation with legal/financial implications.
+
+Schema and rule definition must remain admin-controlled. AI enforces rules but 
+doesn't create them. Admins define schemas via /api/schemas with role-based access 
+control. This prevents AI from changing its own rules and ensures business logic 
+remains under human control. System requires explicit user action to submit 
+proposals—users must click "Submit for Approval" rather than automatic submission.
+
+Key Files:
+- packages/backend/src/services/proposal.service.ts - Approval/rejection/submission logic
+- packages/backend/src/routes/schema.routes.ts - Admin-only schema endpoints
+- packages/ai-service/main.py - AI service with no database access
+
+Design Principle:
+AI suggests, humans decide—especially for approval, schema definition, and final 
+distribution.
+
+================================================================================
+
+2. EXPLAINABILITY
+
+How to make AI outputs understandable and trustworthy?
+
+Structured explainability metadata for each section:
+
+1. Confidence Score (0.0-1.0): How well survey notes support content
+2. Rationale: Which parts of survey notes influenced response
+3. Source References: Specific quotes from survey notes
+4. Missing Info: Critical information not found in input
+
+Rule enforcement transparency:
+- rule_enforcement object shows which rules passed/failed
+- Violation details with severity levels (strict/warning/advisory)
+- all_rules_passed boolean for immediate compliance visibility
+- Immutable version tracking traces content evolution
+
+Example JSON Response:
+{
+  "confidence_score": 0.85,
+  "rationale": "Based on survey notes indicating...",
+  "source_references": ["Quote: '...'"],
+  "missing_info": ["Budget details"],
+  "rule_enforcement": {
+    "passed": true,
+    "warnings": ["Could be more concise"]
+  }
+}
+
+Key Files:
+- packages/ai-service/main.py - DraftSection model with metadata
+- packages/ai-service/rule_engine.py - Violation tracking
+- packages/backend/src/db/migrations/20260131000004_create_proposal_versions_table.ts - Version history
+
+Design Principle:
+Every AI decision includes confidence scores, rationale, source references, and 
+rule enforcement results. Transparency builds trust.
+
+================================================================================
+
+3. DATA INTEGRITY
+
+How to prevent AI pollution of historical data?
+
+Immutable version history via proposal_versions table:
+- Every change creates new version record with complete snapshot
+- proposals table maintains current_version but never overwrites history
+- UNIQUE(proposal_id, version_number) prevents duplicates
+- Non-admins only see versions up to approved version
+
+Four protection layers:
+
+1. Status-Based Access Control: Non-admins can only edit draft or rejected status. 
+   Approved = read-only.
+
+2. Export Restrictions: Only approved proposals can be exported to Word documents.
+
+3. AI Service Isolation: AI service has zero database access—only generates content, 
+   returns via HTTP. Backend controls all persistence.
+
+4. Transactional Writes: If any step fails, entire transaction rolls back. 
+   No partial/corrupted data.
+
+Data Protection Flow:
+User Input → Backend Validation → AI Generation → Rule Enforcement
+→ Backend Transaction (All or Nothing) → Database (Immutable Versions)
+
+Key Files:
+- packages/backend/src/services/proposal.service.ts - Transaction handling
+- packages/backend/src/db/migrations/20260131000004_create_proposal_versions_table.ts - Version schema
+- packages/ai-service/main.py - No database imports
+
+Design Principle:
+Immutable versions, status-based access, transactional writes, and AI isolation 
+protect data integrity through multiple defensive layers.
+
+================================================================================
+
+4. FAILURE MODES
+
+How should system behave when AI fails?
+
+Graceful degradation and human fallback:
+
+AI Service Unavailable:
+- Backend catches error in aiService.generateDraft()
+- Transaction rolls back (no partial data)
+- Clear error message to user
+- Options: Retry | Manual Edit | Improve Input
+
+Incomplete/Low-Confidence Output:
+
+1. Explicit Gap Identification: missing_info array lists gaps
+2. Confidence Signals: confidence_score (0.0-1.0) signals uncertainty
+3. Tiered Rule Enforcement:
+   - Strict violations → all_rules_passed: false (blocks)
+   - Warning violations → logged but allows content
+   - Advisory violations → guidance without blocking
+4. Multiple Recovery Options:
+   - Regenerate via regenerateProposal()
+   - Manual edit via updateProposal()
+   - Retry with improved survey notes
+
+Failure Flows:
+
+AI Unavailable:
+AI Unavailable → Error Caught → Transaction Rollback → User Notified
+→ Options: Retry | Manual Edit | Improve Input
+
+Low Confidence:
+Low Confidence → Missing Info Populated → User Sees Warnings
+→ Options: Accept | Regenerate | Edit | Add More Notes
+
+Key Files:
+- packages/backend/src/services/ai.service.ts - Error handling
+- packages/backend/src/services/proposal.service.ts - Rollback, regeneration
+- packages/ai-service/main.py - Confidence/missing_info fields
+- packages/ai-service/rule_engine.py - Tiered severity
+
+Design Principle:
+Clear errors, transaction rollbacks, confidence signals, tiered enforcement, and 
+manual overrides ensure graceful degradation. Humans can always override AI.
+
+================================================================================
+
+GOVERNANCE SUMMARY
+
+The AI Proposal Platform's governance model is built on four principles:
+
+1. Human Authority: AI suggests, humans decide—especially for approval, schema 
+   definition, and distribution
+
+2. Transparent Explainability: Every AI decision includes confidence scores, 
+   rationale, sources, and rule enforcement
+
+3. Protected Data Integrity: Immutable versions, status-based access, transactional 
+   writes, AI isolation
+
+4. Graceful Failure Handling: Clear errors, rollbacks, confidence signals, tiered 
+   enforcement, manual overrides
+
+These principles ensure the system augments human decision-making rather than 
+replacing it, maintaining accountability and trust in AI-generated content.
+
+================================================================================

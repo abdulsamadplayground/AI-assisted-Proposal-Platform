@@ -12,6 +12,10 @@ interface ProposalSection {
   name: string;
   content: string;
   type?: string;
+  confidence_score?: number;
+  rationale?: string;
+  source_references?: string[];
+  missing_info?: string[];
 }
 
 interface ProposalVersion {
@@ -551,7 +555,39 @@ export default function ProposalDetailPage() {
           proposal.sections.map((section) => (
             <div key={section.id} className="bg-white rounded-lg shadow">
               <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">{section.name}</h2>
+                <div className="flex-1">
+                  <h2 className="text-xl font-semibold text-gray-900">{section.name}</h2>
+                  
+                  {/* AI Metadata */}
+                  {(section.confidence_score !== undefined || section.rationale) && (
+                    <div className="mt-2 flex items-center gap-3 text-sm">
+                      {section.confidence_score !== undefined && (
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-600">Confidence:</span>
+                          <div className="flex items-center gap-1">
+                            <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
+                              <div 
+                                className={`h-full rounded-full ${
+                                  section.confidence_score >= 0.8 ? 'bg-green-500' :
+                                  section.confidence_score >= 0.6 ? 'bg-yellow-500' :
+                                  'bg-red-500'
+                                }`}
+                                style={{ width: `${section.confidence_score * 100}%` }}
+                              />
+                            </div>
+                            <span className={`font-medium ${
+                              section.confidence_score >= 0.8 ? 'text-green-700' :
+                              section.confidence_score >= 0.6 ? 'text-yellow-700' :
+                              'text-red-700'
+                            }`}>
+                              {(section.confidence_score * 100).toFixed(0)}%
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
                 {isEditing && (proposal.status.toLowerCase() === 'draft' || proposal.status.toLowerCase() === 'rejected') && (
                   <button
                     onClick={() => handleRegenerateSection(section.id)}
@@ -569,6 +605,51 @@ export default function ProposalDetailPage() {
                   </button>
                 )}
               </div>
+              
+              {/* AI Rationale */}
+              {section.rationale && (
+                <div className="px-6 py-3 bg-blue-50 border-b border-blue-100">
+                  <div className="flex items-start gap-2">
+                    <span className="text-blue-700 font-medium text-sm flex-shrink-0">AI Rationale:</span>
+                    <p className="text-blue-900 text-sm">{section.rationale}</p>
+                  </div>
+                </div>
+              )}
+              
+              {/* Source References */}
+              {section.source_references && section.source_references.length > 0 && (
+                <div className="px-6 py-3 bg-green-50 border-b border-green-100">
+                  <div className="flex items-start gap-2">
+                    <span className="text-green-700 font-medium text-sm flex-shrink-0">Sources:</span>
+                    <div className="text-green-900 text-sm space-y-1">
+                      {section.source_references.map((ref, idx) => (
+                        <div key={idx} className="flex items-start gap-1">
+                          <span className="text-green-600">•</span>
+                          <span className="italic">"{ref}"</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Missing Info */}
+              {section.missing_info && section.missing_info.length > 0 && (
+                <div className="px-6 py-3 bg-yellow-50 border-b border-yellow-100">
+                  <div className="flex items-start gap-2">
+                    <span className="text-yellow-700 font-medium text-sm flex-shrink-0">Missing Info:</span>
+                    <div className="text-yellow-900 text-sm space-y-1">
+                      {section.missing_info.map((info, idx) => (
+                        <div key={idx} className="flex items-start gap-1">
+                          <span className="text-yellow-600">⚠</span>
+                          <span>{info}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+              
               <div className="p-6">
                 {isEditing && (proposal.status.toLowerCase() === 'draft' || proposal.status.toLowerCase() === 'rejected') ? (
                   <textarea
