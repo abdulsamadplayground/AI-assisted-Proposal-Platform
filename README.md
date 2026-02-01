@@ -343,159 +343,72 @@ ai-proposal-platform/
 
 > **Governance model ensuring AI augments human decision-making rather than replacing it**
 
-**📄 Complete Analysis:** [AI_GOVERNANCE_ANALYSIS.md](AI_GOVERNANCE_ANALYSIS.md)
+**📄 Complete Documentation:**
+- [AI_REASONING_AND_GOVERNANCE.txt](docs/PART%203/AI_REASONING_AND_GOVERNANCE.txt) - Full Part 3 content (editable text file)
+- [AI_GOVERNANCE_ANALYSIS.md](AI_GOVERNANCE_ANALYSIS.md) - Detailed analysis with code references
+
+**Summary:** Part 3 covers four critical governance areas:
+
+1. **AI Authority** - Which parts should never be fully automated (approval decisions, schema definition)
+2. **Explainability** - How AI outputs are made understandable (confidence scores, rationale, source references)
+3. **Data Integrity** - How AI pollution is prevented (immutable versions, transactional writes, AI isolation)
+4. **Failure Modes** - How system behaves when AI fails (graceful degradation, human fallback options)
+
+**Governance Principles:**
+- Human Authority: AI suggests, humans decide
+- Transparent Explainability: Every decision includes confidence scores and rationale
+- Protected Data Integrity: Immutable versions and transactional writes
+- Graceful Failure Handling: Clear errors and manual override capabilities
 
 ---
 
-### AI Authority
-
-**Which parts should never be fully automated?**
-
-**Final approval decisions must remain human-controlled.** Strict status workflow (`draft` → `pending_approval` → `approved/rejected`) where only admins can approve/reject. AI generates content but cannot change status or write to database—it only returns sections to backend, which handles all database operations. This ensures humans retain authority over official, binding documentation with legal/financial implications.
-
-**Schema and rule definition must remain admin-controlled.** AI enforces rules but doesn't create them. Admins define schemas via `/api/schemas` with role-based access control. This prevents AI from changing its own rules and ensures business logic remains under human control. System requires explicit user action to submit proposals—users must click "Submit for Approval" rather than automatic submission.
-
-**Key Files:**
-- [`proposal.service.ts`](packages/backend/src/services/proposal.service.ts) - Approval/rejection/submission logic
-- [`schema.routes.ts`](packages/backend/src/routes/schema.routes.ts) - Admin-only schema endpoints
-- [`main.py`](packages/ai-service/main.py) - AI service with no database access
-
-**Design Principle:**
-> AI suggests, humans decide—especially for approval, schema definition, and final distribution.
 
 ---
 
-### Explainability
+## Part 3: AI Reasoning & Governance
 
-**How to make AI outputs understandable and trustworthy?**
+> **Governance model ensuring AI augments human decision-making rather than replacing it**
 
-**Structured explainability metadata for each section:**
+**📄 Complete Documentation:**
+- [AI_REASONING_AND_GOVERNANCE.txt](docs/PART%203/AI_REASONING_AND_GOVERNANCE.txt) - Full Part 3 content (editable text file)
+- [AI_GOVERNANCE_ANALYSIS.md](AI_GOVERNANCE_ANALYSIS.md) - Detailed analysis with code references
 
-1. **Confidence Score** (0.0-1.0): How well survey notes support content
-2. **Rationale**: Which parts of survey notes influenced response
-3. **Source References**: Specific quotes from survey notes
-4. **Missing Info**: Critical information not found in input
+**Summary:** Part 3 covers four critical governance areas:
 
-**Rule enforcement transparency:**
-- `rule_enforcement` object shows which rules passed/failed
-- Violation details with severity levels (strict/warning/advisory)
-- `all_rules_passed` boolean for immediate compliance visibility
-- Immutable version tracking traces content evolution
+1. **AI Authority** - Which parts should never be fully automated (approval decisions, schema definition)
+2. **Explainability** - How AI outputs are made understandable (confidence scores, rationale, source references)
+3. **Data Integrity** - How AI pollution is prevented (immutable versions, transactional writes, AI isolation)
+4. **Failure Modes** - How system behaves when AI fails (graceful degradation, human fallback options)
 
-**Example:**
-```json
-{
-  "confidence_score": 0.85,
-  "rationale": "Based on survey notes indicating...",
-  "source_references": ["Quote: '...'"],
-  "missing_info": ["Budget details"],
-  "rule_enforcement": {
-    "passed": true,
-    "warnings": ["Could be more concise"]
-  }
-}
-```
-
-**Key Files:**
-- [`main.py`](packages/ai-service/main.py) - DraftSection model with metadata
-- [`rule_engine.py`](packages/ai-service/rule_engine.py) - Violation tracking
-- [`20260131000004_create_proposal_versions_table.ts`](packages/backend/src/db/migrations/20260131000004_create_proposal_versions_table.ts) - Version history
-
-**Design Principle:**
-> Every AI decision includes confidence scores, rationale, source references, and rule enforcement results. Transparency builds trust.
+**Governance Principles:**
+- Human Authority: AI suggests, humans decide
+- Transparent Explainability: Every decision includes confidence scores and rationale
+- Protected Data Integrity: Immutable versions and transactional writes
+- Graceful Failure Handling: Clear errors and manual override capabilities
 
 ---
 
-### Data Integrity
-
-**How to prevent AI pollution of historical data?**
-
-**Immutable version history via `proposal_versions` table:**
-- Every change creates new version record with complete snapshot
-- `proposals` table maintains `current_version` but never overwrites history
-- `UNIQUE(proposal_id, version_number)` prevents duplicates
-- Non-admins only see versions up to approved version
-
-**Four protection layers:**
-
-1. **Status-Based Access Control**: Non-admins can only edit `draft` or `rejected` status. Approved = read-only.
-
-2. **Export Restrictions**: Only approved proposals can be exported to Word documents.
-
-3. **AI Service Isolation**: AI service has **zero database access**—only generates content, returns via HTTP. Backend controls all persistence.
-
-4. **Transactional Writes**: If any step fails, entire transaction rolls back. No partial/corrupted data.
-
-**Data Protection Flow:**
-```
-User Input → Backend Validation → AI Generation → Rule Enforcement
-→ Backend Transaction (All or Nothing) → Database (Immutable Versions)
-```
-
-**Key Files:**
-- [`proposal.service.ts`](packages/backend/src/services/proposal.service.ts) - Transaction handling
-- [`20260131000004_create_proposal_versions_table.ts`](packages/backend/src/db/migrations/20260131000004_create_proposal_versions_table.ts) - Version schema
-- [`main.py`](packages/ai-service/main.py) - No database imports
-
-**Design Principle:**
-> Immutable versions, status-based access, transactional writes, and AI isolation protect data integrity through multiple defensive layers.
-
 ---
 
-### Failure Modes
+## Part 3: AI Reasoning & Governance
 
-**How should system behave when AI fails?**
+> **Governance model ensuring AI augments human decision-making rather than replacing it**
 
-**Graceful degradation and human fallback:**
+**📄 Complete Documentation:**
+- **[AI_REASONING_AND_GOVERNANCE.txt](docs/PART%203/AI_REASONING_AND_GOVERNANCE.txt)** - Full Part 3 content (editable text file)
+- **[AI_GOVERNANCE_ANALYSIS.md](AI_GOVERNANCE_ANALYSIS.md)** - Detailed analysis with code references
 
-**AI Service Unavailable:**
-- Backend catches error in `aiService.generateDraft()`
-- Transaction rolls back (no partial data)
-- Clear error message to user
-- Options: Retry | Manual Edit | Improve Input
+**Summary:** Part 3 covers four critical governance areas:
 
-**Incomplete/Low-Confidence Output:**
+1. **AI Authority** - Which parts should never be fully automated (approval decisions, schema definition)
+2. **Explainability** - How AI outputs are made understandable (confidence scores, rationale, source references)
+3. **Data Integrity** - How AI pollution is prevented (immutable versions, transactional writes, AI isolation)
+4. **Failure Modes** - How system behaves when AI fails (graceful degradation, human fallback options)
 
-1. **Explicit Gap Identification**: `missing_info` array lists gaps
-2. **Confidence Signals**: `confidence_score` (0.0-1.0) signals uncertainty
-3. **Tiered Rule Enforcement**:
-   - Strict violations → `all_rules_passed: false` (blocks)
-   - Warning violations → logged but allows content
-   - Advisory violations → guidance without blocking
-4. **Multiple Recovery Options**:
-   - Regenerate via `regenerateProposal()`
-   - Manual edit via `updateProposal()`
-   - Retry with improved survey notes
-
-**Failure Flows:**
-```
-AI Unavailable → Error Caught → Transaction Rollback → User Notified
-→ Options: Retry | Manual Edit | Improve Input
-
-Low Confidence → Missing Info Populated → User Sees Warnings
-→ Options: Accept | Regenerate | Edit | Add More Notes
-```
-
-**Key Files:**
-- [`ai.service.ts`](packages/backend/src/services/ai.service.ts) - Error handling
-- [`proposal.service.ts`](packages/backend/src/services/proposal.service.ts) - Rollback, regeneration
-- [`main.py`](packages/ai-service/main.py) - Confidence/missing_info fields
-- [`rule_engine.py`](packages/ai-service/rule_engine.py) - Tiered severity
-
-**Design Principle:**
-> Clear errors, transaction rollbacks, confidence signals, tiered enforcement, and manual overrides ensure graceful degradation. Humans can always override AI.
-
----
-
-## Governance Summary
-
-The AI Proposal Platform's governance model is built on four principles:
-
-1. **Human Authority**: AI suggests, humans decide—especially for approval, schema definition, and distribution
-2. **Transparent Explainability**: Every AI decision includes confidence scores, rationale, sources, and rule enforcement
-3. **Protected Data Integrity**: Immutable versions, status-based access, transactional writes, AI isolation
-4. **Graceful Failure Handling**: Clear errors, rollbacks, confidence signals, tiered enforcement, manual overrides
-
-These principles ensure the system augments human decision-making rather than replacing it, maintaining accountability and trust in AI-generated content.
+**Governance Principles:**
+- **Human Authority**: AI suggests, humans decide
+- **Transparent Explainability**: Every decision includes confidence scores and rationale
+- **Protected Data Integrity**: Immutable versions and transactional writes
+- **Graceful Failure Handling**: Clear errors and manual override capabilities
 
 ---
