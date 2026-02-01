@@ -9,30 +9,27 @@ A comprehensive platform that enables users to create structured business propos
 ## 📑 Table of Contents
 
 - [Overview](#overview)
-- [Codebase Architecture](#codebase-architecture)
-- [AI Approach](#ai-approach)
-  - [Prompt & Orchestration Strategy](#prompt--orchestration-strategy)
-  - [How SOPs are Incorporated](#how-sops-are-incorporated)
-  - [Limitations and Next Steps](#limitations-and-next-steps)
-- [Quality of AI Integration](#quality-of-ai-integration)
-- [Structure and Clarity of Outputs](#structure-and-clarity-of-outputs)
-- [Explainability](#explainability)
-- [Workflow Alignment](#workflow-alignment)
-- [Safety and Control Design](#safety-and-control-design)
-- [Main Routes](#main-routes)
-  - [User Routes](#user-routes)
-  - [Admin Routes](#admin-routes)
-  - [AI Service Routes](#ai-service-routes)
-  - [Backend API Routes](#backend-api-routes)
-- [Getting Started](#getting-started)
-- [Technology Stack](#technology-stack)
-- [Key Features](#key-features)
+- [Part 1: AI System Design & Architecture](#part-1-ai-system-design--architecture)
+  - [High-Level Architecture](#high-level-architecture)
+  - [Design Philosophy](#design-philosophy)
+  - [AI Components and Orchestration](#ai-components-and-orchestration)
+  - [Data Storage Strategy](#data-storage-strategy)
+  - [Human-in-the-Loop Checkpoints](#human-in-the-loop-checkpoints)
+  - [Key Tradeoffs](#key-tradeoffs)
+- [Part 2: Implementation Details](#part-2-implementation-details)
+  - [Codebase Architecture](#codebase-architecture)
+  - [AI Integration](#ai-integration)
+- [Part 3: AI Reasoning & Governance](#part-3-ai-reasoning--governance)
+  - [AI Authority](#ai-authority)
+  - [Explainability](#explainability)
+  - [Data Integrity](#data-integrity)
+  - [Failure Modes](#failure-modes)
 
 ---
 
 ## Overview
 
-The AI-Assisted Proposal & Document Intelligence Platform is NOT a simple prompting service. It is a **schema-driven, rule-enforced content generation protocol** where:
+The AI-Assisted Proposal & Document Intelligence Platform is a **schema-driven, rule-enforced content generation protocol** where:
 
 1. **Admins define schemas** with sections and rules that MUST be followed
 2. **Rules are STRICTLY ENFORCED** - not suggestions, but hard constraints
@@ -40,51 +37,239 @@ The AI-Assisted Proposal & Document Intelligence Platform is NOT a simple prompt
 4. **Backend validates** all AI outputs against rules before saving
 5. **Users maintain control** over all final decisions and edits
 
+---
+
+## Part 1: AI System Design & Architecture
+
+> **Comprehensive architectural analysis and design decisions**
+
+**📊 Visual Resources:**
+- [Complete System Architecture](ai_proposal_architecture.png)
+- [AI Orchestration Flow](ai_orchestration_flow.png)
+- [Data Storage Strategy](data_storage_strategy.png)
+- [Human Checkpoints](human_checkpoints.png)
+- [Sequence Diagrams](sequence_diagram.py)
+
+**📄 Detailed Documentation:**
+- [ARCHITECTURE.md](ARCHITECTURE.md) - Complete architecture with ASCII diagrams
+- [ARCHITECTURE_ANALYSIS.md](ARCHITECTURE_ANALYSIS.md) - Component analysis with code
+- [ARCHITECTURE_RATIONALE.md](ARCHITECTURE_RATIONALE.md) - Complete rationale
+- [DATA_FLOW_ANALYSIS.md](DATA_FLOW_ANALYSIS.md) - Data flow and transformations
+- [SEQUENCE_DIAGRAMS.md](SEQUENCE_DIAGRAMS.md) - Text-based sequence diagrams
 
 ---
 
-## Codebase Architecture
+### High-Level Architecture
+
+```
+Frontend (Vercel) ←→ Backend (Railway) ←→ AI Service (Vercel)
+                           ↓                      ↓
+                      PostgreSQL               LLM API
+                       (Neon)                  (Groq)
+```
+
+**Key Separation:**
+- **Frontend**: User interaction, display, client-side validation
+- **Backend**: Business logic, authentication, database operations, orchestration
+- **AI Service**: Content generation, rule enforcement, prompt engineering (NO database access)
+- **Database**: Authoritative data storage with ACID guarantees
+
+---
+
+### Design Philosophy
+
+**Core Principles:**
+
+1. **Multi-Tier Separation of Concerns**: Each layer has single responsibility, easy to test independently, can scale independently
+
+2. **Specialized Service Architecture**: Node.js for API/database, Python for AI/ML - right tool for each job
+
+3. **Schema-Driven AI**: Admins define schemas before generation - ensures consistent, compliant outputs
+
+4. **Rule Enforcement Layer**: Post-generation validation - LLMs are probabilistic, validation is deterministic
+
+5. **Version Control at Data Layer**: Immutable version history - complete audit trail, rollback capability
+
+6. **Managed Services**: Vercel/Railway/Neon - reduce operational burden, focus on features
+
+**Overall Thinking:**
+> Treat the LLM as an unreliable but useful text generator, wrap it in deterministic validation layers, optimize for fast iteration and debugging, and keep the architecture simple enough that a small team can operate it confidently.
+
+---
+
+### AI Components and Orchestration
+
+**🔧 Four Core Components:**
+
+1. **LLM Adapter** ([`llm_adapter.py`](packages/ai-service/llm_adapter.py))
+   - Interface with Groq LLM API
+   - Rate limiting, retries, token tracking
+   - Provider abstraction (easy to swap LLMs)
+
+2. **Prompt Engineer** ([`prompt_engineering.py`](packages/ai-service/prompt_engineering.py))
+   - Template-based prompt generation
+   - Context injection (survey notes + rules)
+   - Structured JSON output formatting
+
+3. **Rule Engine** ([`rule_engine.py`](packages/ai-service/rule_engine.py))
+   - Enforce admin-defined rules on AI output
+   - 6 rule types: LENGTH, PATTERN, REQUIRED_FIELD, VALIDATION, FORMAT, CONSTRAINT
+   - 3 enforcement levels: Strict (blocks), Warning (logs), Advisory (suggests)
+
+4. **Schema Manager** ([`schema_manager.py`](packages/ai-service/schema_manager.py))
+   - In-memory schema caching
+   - Schema versioning and validation
+   - Fast rule lookup
+
+**🔄 Orchestration Flow (11 Steps):**
+
+```
+1. User submits survey notes
+2. Frontend → Backend (POST /api/proposals)
+3. Backend creates proposal record (status=draft)
+4. Backend → AI Service (POST /api/ai/generate-draft)
+5. AI Service → Schema Manager (load schema + rules)
+6. For each section:
+   a. Prompt Engineer builds prompt
+   b. LLM Adapter calls Groq API
+   c. Rule Engine validates output
+7. AI Service → Backend (return sections + metadata)
+8. Backend updates proposal with sections
+9. Backend creates version 1 record
+10. Backend → Frontend (return complete proposal)
+11. Frontend displays to user
+```
+
+**Key Decisions:**
+- **Post-Generation Validation**: Enforce rules AFTER generation (deterministic vs. probabilistic)
+- **In-Memory Schema Caching**: Fast access, schemas change infrequently
+- **Section-by-Section Generation**: Simpler error handling, easier debugging
+- **Tiered Rule Enforcement**: Balance compliance with flexibility
+- **Synchronous Orchestration**: 10-30 second wait, simpler implementation
+
+---
+
+### Data Storage Strategy
+
+**Data Flow Philosophy:**
+
+**End-to-End JSON Transformation Pipeline**: Objects → JSON strings for storage → JSON strings → Objects for use
+
+**Transactional Atomicity**: All related writes in single transaction - all-or-nothing commits
+
+**Complete Data Journey:**
+```
+User Input → Frontend Object → HTTP (JSON) → Backend Validation
+→ AI Generation → Backend JSON.stringify() → PostgreSQL TEXT Column
+→ Version Snapshot → Transaction Commit → Later: SELECT → JSON.parse()
+→ HTTP Response → Frontend Render
+```
+
+**Storage Patterns:**
+
+1. **Immutable Version History**: Version records NEVER updated, only INSERT, complete snapshots
+2. **JSON in TEXT Columns**: Flexible schema, portable across databases
+3. **Status-Based Access Control**: `draft` (editable) → `pending_approval` (read-only) → `approved` (read-only, exportable) → `rejected` (editable)
+4. **Transactional Integrity**: Commit or rollback atomically - no partial data
+
+**Why This Approach?**
+- Simplicity: JSON in TEXT is simple and portable
+- Flexibility: Store any structure without schema changes
+- Auditability: Complete version history for compliance
+- Performance: Good enough for <1000 proposals/month
+
+---
+
+### Human-in-the-Loop Checkpoints
+
+**Design Philosophy:**
+> AI accelerates draft creation, but humans remain the decision-makers at every critical juncture—defining standards, reviewing outputs, editing content, granting approvals, and controlling distribution.
+
+**The 5 Critical Checkpoints:**
+
+| # | Checkpoint | Actor | Decision | Safeguard | Code |
+|---|------------|-------|----------|-----------|------|
+| 1 | **Schema Definition** | Admin | What rules to enforce | Role check, validation | [`schema.routes.ts`](packages/backend/src/routes/schema.routes.ts) |
+| 2 | **Proposal Submission** | User | Ready for review | Ownership, status check | [`proposal.service.ts`](packages/backend/src/services/proposal.service.ts) |
+| 3 | **Approval/Rejection** | Admin | Meets standards | Role check, immutable record | [`proposal.service.ts`](packages/backend/src/services/proposal.service.ts) |
+| 4 | **Content Editing** | User/Admin | What to change | Status check, versioning | [`proposal.service.ts`](packages/backend/src/services/proposal.service.ts) |
+| 5 | **Export Control** | User/Admin | Ready for distribution | Status check, approval required | [`proposal.service.ts`](packages/backend/src/services/proposal.service.ts) |
+
+**Key Decisions:**
+- Schema definition BEFORE generation (prevents "garbage in, garbage out")
+- Draft-first, approve-later workflow (mandatory review gate)
+- Unrestricted editing after generation (AI is starting point, not oracle)
+- Export as final checkpoint (prevents accidental external sharing)
+- Audit trails at each checkpoint (accountability and compliance)
+
+---
+
+### Key Tradeoffs
+
+**Design Philosophy:**
+> Optimize for team velocity over theoretical scale. Favor determinism over AI autonomy.
+
+**The 8 Major Tradeoffs:**
+
+1. **Latency vs Quality**: 10-30 second wait for complete proposals (synchronous) vs. instant response (async)
+   - **Choice**: Synchronous - simpler, immediate feedback, no job queue complexity
+
+2. **Flexibility vs Consistency**: Rigid section structures (schema-driven) vs. freeform AI creativity
+   - **Choice**: Schema-driven - regulatory compliance, brand consistency
+
+3. **Cost vs Capability**: Groq/llama-3.3-70b (~10x cheaper) vs. GPT-4 (higher quality)
+   - **Choice**: Groq - "good enough" quality, adapter pattern allows easy switching
+
+4. **Simplicity vs Scalability**: Monolithic services vs. decomposed microservices
+   - **Choice**: Monolithic - <1000 users initially, vertical scaling handles 10-100x growth
+
+5. **Storage vs Compute**: Full version snapshots vs. diffs between versions
+   - **Choice**: Full snapshots - simpler retrieval, storage is cheap
+
+6. **Real-time vs Eventual Consistency**: ACID transactions vs. event sourcing
+   - **Choice**: ACID - immediate consistency, simpler to debug
+
+7. **Security vs Convenience**: JWT auth with httpOnly cookies vs. session-based auth
+   - **Choice**: JWT - stateless, scales well, prevents XSS
+
+8. **AI Control vs Creativity**: Strict rule enforcement vs. minimal constraints
+   - **Choice**: Strict enforcement - compliance requirements, predictable output
+
+**Key Assumptions:**
+- Users provide sufficient survey notes and review AI output
+- <1000 proposals/month, <100 concurrent users, <10 active schemas
+- 99% uptime acceptable, Groq API reliable
+- Audit trail meets regulatory requirements
+
+**Validation Triggers:**
+- If >500 proposals/day or >5000 users → re-evaluate architecture
+- If <70% approval rate or >50% heavy editing → upgrade LLM
+- Any data breach → escalate security priority
+
+---
+
+## Part 2: Implementation Details
+
+### Codebase Architecture
 
 ```
 ai-proposal-platform/
-│
 ├── packages/
 │   ├── frontend/                    # Next.js/React Frontend
-│   │   ├── src/
-│   │   │   ├── app/
-│   │   │   │   ├── admin/          # Admin Portal
-│   │   │   │   │   ├── dashboard/  # Admin dashboard
-│   │   │   │   │   ├── proposals/  # Proposal review & management
-│   │   │   │   │   ├── schemas/    # Schema creation & management
-│   │   │   │   │   └── users/      # User management
-│   │   │   │   ├── user/           # User Portal
-│   │   │   │   │   ├── dashboard/  # User dashboard
-│   │   │   │   │   └── proposals/  # Proposal creation & editing
-│   │   │   │   └── login/          # Unified login page
-│   │   │   ├── contexts/           # Auth contexts (Admin & User)
-│   │   │   └── lib/                # Utilities (toast, auth)
-│   │   └── public/                 # Static assets
+│   │   ├── src/app/
+│   │   │   ├── admin/              # Admin Portal (dashboard, proposals, schemas, users)
+│   │   │   ├── user/               # User Portal (dashboard, proposals)
+│   │   │   └── login/              # Unified login
+│   │   ├── contexts/               # Auth contexts
+│   │   └── lib/                    # Utilities (toast, auth, api)
 │   │
 │   ├── backend/                     # Node.js/Express Backend
 │   │   ├── src/
-│   │   │   ├── routes/             # API route handlers
-│   │   │   │   ├── auth.routes.ts  # Authentication endpoints
-│   │   │   │   ├── proposal.routes.ts  # Proposal CRUD
-│   │   │   │   ├── schema.routes.ts    # Schema management
-│   │   │   │   └── user.routes.ts      # User management
-│   │   │   ├── services/           # Business logic
-│   │   │   │   ├── auth.service.ts     # Auth logic
-│   │   │   │   ├── proposal.service.ts # Proposal logic
-│   │   │   │   └── ai.service.ts       # AI service client
-│   │   │   ├── middleware/         # Express middleware
-│   │   │   │   ├── auth.middleware.ts  # JWT validation
-│   │   │   │   └── errorHandler.ts     # Error handling
-│   │   │   ├── db/                 # Database layer
-│   │   │   │   ├── migrations/     # Database migrations
-│   │   │   │   ├── seeds/          # Seed data
-│   │   │   │   └── index.ts        # Knex configuration
-│   │   │   └── utils/              # Utilities
-│   │   │       └── logger.ts       # Winston logger
+│   │   │   ├── routes/             # API route handlers (auth, proposal, schema, user)
+│   │   │   ├── services/           # Business logic (auth, proposal, ai)
+│   │   │   ├── middleware/         # Express middleware (auth, error, logging)
+│   │   │   ├── db/                 # Database layer (migrations, seeds)
+│   │   │   └── utils/              # Utilities (logger)
 │   │   └── storage/                # File uploads
 │   │
 │   └── ai-service/                  # Python/FastAPI AI Service
@@ -95,196 +280,222 @@ ai-proposal-platform/
 │       ├── schema_manager.py        # Schema management
 │       └── requirements.txt         # Python dependencies
 │
-├── .kiro/specs/                     # Specification documents
-│   └── ai-proposal-platform/
-│       ├── requirements.md          # Requirements specification
-│       ├── design.md                # Design document
-│       └── tasks.md                 # Implementation tasks
-│
-└── docs/                            # Documentation
-    ├── IMPLEMENTATION_STATUS.md     # Current status
-    ├── API_INTEGRATION_GUIDE.md     # API integration guide
-    └── [other documentation files]
+└── docs/                            # Documentation & diagrams
 ```
-
 
 ---
 
-## AI Approach
+### AI Integration
 
-### Prompt & Orchestration Strategy
+**Prompt & Orchestration Strategy** ([`prompt_engineering.py`](packages/ai-service/prompt_engineering.py))
 
-**Location:** [`packages/ai-service/prompt_engineering.py`](packages/ai-service/prompt_engineering.py)
+1. **Schema-Driven Prompts**: Each section type has dedicated template
+2. **Rule Injection**: Admin rules injected as MUST-FOLLOW constraints
+3. **Real Data Processing**: All prompts use REAL user survey notes
+4. **Structured Output**: JSON with content, confidence, rationale, sources, missing_info
 
-The platform uses a **structured prompt engineering approach** that:
+**SOPs as Admin-Defined Rules** ([`schema_manager.py`](packages/ai-service/schema_manager.py))
 
-1. **Schema-Driven Prompts**: Each section type (Executive Summary, Scope of Work, Timeline, Pricing) has a dedicated prompt template
-2. **Rule Injection**: Admin-defined rules are injected into system messages as MUST-FOLLOW constraints
-3. **Real Data Processing**: All prompts process REAL user survey notes - no mock or placeholder data
-4. **Structured Output**: LLM responses are formatted as JSON with:
-   - `content`: Generated text
-   - `confidence`: Score (0.0-1.0) indicating data quality
-   - `rationale`: Explanation of how survey notes support the content
-   - `sources`: Specific references from survey notes
-   - `missing_info`: List of information not found in survey notes
+- **Rule Types**: Length, Pattern, Required Field, Validation, Format, Constraint
+- **Enforcement Levels**: Strict (blocks), Warning (logs), Advisory (suggests)
+- **Process**: LLM Generates → Rule Engine Validates → Pass/Fail → Admin Review
 
-**Orchestration Flow:**
-```
-User Survey Notes → Schema Selection → Section-by-Section Generation
-                                    ↓
-                            Rule Enforcement → Validation → Storage
-```
+**Quality Metrics** ([`llm_adapter.py`](packages/ai-service/llm_adapter.py))
 
-**Key Files:**
-- [`packages/ai-service/main.py`](packages/ai-service/main.py) - Main orchestration logic
-- [`packages/ai-service/prompt_engineering.py`](packages/ai-service/prompt_engineering.py) - Prompt templates
-- [`packages/ai-service/llm_adapter.py`](packages/ai-service/llm_adapter.py) - LLM API client
+- ✅ LLM API Calls (Groq/OpenAI)
+- ✅ Retry Logic - exponential backoff, 3 attempts
+- ✅ Token Tracking - usage and cost estimation
+- ✅ Average: 4.06s generation, ~500 tokens/section, $0.0002/proposal
 
-### How SOPs are Incorporated
-
-**Location:** [`packages/ai-service/schema_manager.py`](packages/ai-service/schema_manager.py)
-
-SOPs (Standard Operating Procedures) are implemented as **admin-defined rules** that are STRICTLY ENFORCED:
-
-1. **Schema Definition**: Admins create schemas with sections and rules
-   - File: [`packages/frontend/src/app/admin/schemas/create/page.tsx`](packages/frontend/src/app/admin/schemas/create/page.tsx)
-
-2. **Rule Types**:
-   - **Length**: Min/max character constraints
-   - **Pattern**: Regex pattern matching
-   - **Required Field**: Must contain specific keywords
-   - **Validation**: Custom validation logic
-   - **Format**: Structured format requirements (list, itemized, phases)
-   - **Constraint**: Hard business constraints
-
-3. **Enforcement Levels**:
-   - **Strict**: MUST pass - blocks approval if violated
-   - **Warning**: Can proceed with warning displayed
-   - **Advisory**: Suggestion only - doesn't block
-
-4. **Rule Enforcement Process**:
-   ```
-   LLM Generates Content → Rule Engine Validates → Pass/Fail Decision
-                                                  ↓
-                                    Violations Logged → Admin Review
-   ```
-
-**Key Files:**
-- [`packages/ai-service/rule_engine.py`](packages/ai-service/rule_engine.py) - Rule enforcement logic
-- [`packages/ai-service/schema_manager.py`](packages/ai-service/schema_manager.py) - Schema & rule management
-- [`packages/backend/src/routes/schema.routes.ts`](packages/backend/src/routes/schema.routes.ts) - Schema API
-
-### Limitations and Next Steps
-
-**Current Limitations:**
-
-1. **Single LLM Provider**: Currently uses Groq/OpenAI - no automatic fallback
-2. **Sequential Generation**: Sections generated one-by-one (not parallel)
-3. **Limited Multi-Modal**: Text-only processing (images/PDFs not yet integrated)
-4. **No Real-Time Collaboration**: Single-user editing only
-5. **Basic Confidence Scoring**: Simple heuristics (needs ML-based scoring)
-
-**Next Steps:**
-
-1. **Multi-Provider Fallback**: Implement automatic fallback between OpenAI, Groq, Azure
-2. **Parallel Generation**: Generate multiple sections concurrently
-3. **Multi-Modal Input**: Process images, PDFs, and documents from survey attachments
-4. **Advanced Confidence Scoring**: ML-based scoring using survey note quality metrics
-5. **Real-Time Collaboration**: WebSocket-based multi-user editing
-6. **Caching Layer**: Cache common rule outputs and schema definitions
-7. **A/B Testing**: Test different prompt strategies for better outputs
-
-
----
-
-## Quality of AI Integration
-
-### Real API Calls - No Mocks
-
-**Location:** [`packages/ai-service/llm_adapter.py`](packages/ai-service/llm_adapter.py)
-
-- ✅ **100% Real LLM API Calls**: All calls use actual Groq/OpenAI APIs
-- ✅ **No Mock Data**: All survey notes come from real user input
-- ✅ **Retry Logic**: Exponential backoff with 3 retry attempts
-- ✅ **Token Tracking**: Tracks token usage and estimated costs
-- ✅ **Timeout Handling**: 30-second timeout with graceful failure
-- ✅ **Error Handling**: Comprehensive error handling with logging
-
-**Test Results:**
-- Average generation time: 4.06 seconds for 4-section proposal
-- Token usage: ~500 tokens per section
-- Cost: $0.0002 per generation (Groq)
-- Success rate: 100% in testing
-
-### Schema-Driven Architecture
-
-**Location:** [`packages/ai-service/schema_manager.py`](packages/ai-service/schema_manager.py)
-
-- ✅ **Admin-Defined Schemas**: Admins create schemas with sections and rules
-- ✅ **Version Control**: Schemas have version numbers for tracking
-- ✅ **Validation**: Schemas validated before activation
-- ✅ **Multiple Schemas**: Support for multiple schemas per organization
-- ✅ **Active Schema**: One active schema at a time per user
-
-### Rule Enforcement
-
-**Location:** [`packages/ai-service/rule_engine.py`](packages/ai-service/rule_engine.py)
-
-- ✅ **Strict Enforcement**: Rules are NOT suggestions - they are enforced
-- ✅ **Violation Tracking**: All violations logged with severity
-- ✅ **Pass/Fail Logic**: Strict violations block approval
-- ✅ **Transformation Support**: Rules can transform content
-- ✅ **Detailed Reporting**: Violations include rule ID, message, and details
-
----
-
-## Structure and Clarity of Outputs
-
-### Structured JSON Responses
-
-**Location:** [`packages/ai-service/main.py`](packages/ai-service/main.py) - `DraftGenerationResponse`
-
-All AI outputs follow a consistent structure:
+**Structured JSON Response:**
 
 ```json
 {
-  "draft_id": "uuid",
-  "proposal_id": "uuid",
-  "schema_id": "uuid",
-  "schema_version": "1.0.0",
-  "sections": [
-    {
-      "type": "executive_summary",
-      "content": "Generated content...",
-      "confidence_score": 0.85,
-      "rationale": "Based on survey notes...",
-      "source_references": ["Quote from survey"],
-      "missing_info": ["Budget details"],
-      "order": 1,
-      "rule_enforcement": {
-        "passed": true,
-        "violations": [],
-        "warnings": [],
-        "advisories": []
-      }
+  "sections": [{
+    "type": "executive_summary",
+    "content": "Generated text...",
+    "confidence_score": 0.85,
+    "rationale": "Based on survey notes...",
+    "source_references": ["Quote from survey"],
+    "missing_info": ["Budget details"],
+    "rule_enforcement": {
+      "passed": true,
+      "violations": [],
+      "warnings": [],
+      "advisories": []
     }
-  ],
-  "model_version": "llama-3.3-70b-versatile",
-  "rules_enforced": 15,
+  }],
+  "all_rules_passed": true,
   "token_usage": 2000,
-  "estimated_cost": 0.0002,
-  "processing_time": 4.06,
-  "all_rules_passed": true
+  "estimated_cost": 0.0002
 }
 ```
 
-### Section-Level Clarity
+**Current Limitations & Next Steps:**
 
-Each section includes:
-- **Content**: The generated text
-- **Confidence Score**: How well survey notes support the content
-- **Rationale**: Explanation of generation logic
-- **Source References**: Specific quotes from survey notes
-- **Missing Info**: What information was not found
-- **Rule Enforcement**: Pass/fail status with violations
+**Limitations**: Single LLM provider, sequential generation, text-only, single-user editing, basic confidence scoring
 
+**Next Steps**: Multi-provider fallback, parallel generation, multi-modal input, real-time collaboration, ML-based confidence scoring, caching layer, A/B testing
+
+---
+
+## Part 3: AI Reasoning & Governance
+
+> **Governance model ensuring AI augments human decision-making rather than replacing it**
+
+**📄 Complete Analysis:** [AI_GOVERNANCE_ANALYSIS.md](AI_GOVERNANCE_ANALYSIS.md)
+
+---
+
+### AI Authority
+
+**Which parts should never be fully automated?**
+
+**Final approval decisions must remain human-controlled.** Strict status workflow (`draft` → `pending_approval` → `approved/rejected`) where only admins can approve/reject. AI generates content but cannot change status or write to database—it only returns sections to backend, which handles all database operations. This ensures humans retain authority over official, binding documentation with legal/financial implications.
+
+**Schema and rule definition must remain admin-controlled.** AI enforces rules but doesn't create them. Admins define schemas via `/api/schemas` with role-based access control. This prevents AI from changing its own rules and ensures business logic remains under human control. System requires explicit user action to submit proposals—users must click "Submit for Approval" rather than automatic submission.
+
+**Key Files:**
+- [`proposal.service.ts`](packages/backend/src/services/proposal.service.ts) - Approval/rejection/submission logic
+- [`schema.routes.ts`](packages/backend/src/routes/schema.routes.ts) - Admin-only schema endpoints
+- [`main.py`](packages/ai-service/main.py) - AI service with no database access
+
+**Design Principle:**
+> AI suggests, humans decide—especially for approval, schema definition, and final distribution.
+
+---
+
+### Explainability
+
+**How to make AI outputs understandable and trustworthy?**
+
+**Structured explainability metadata for each section:**
+
+1. **Confidence Score** (0.0-1.0): How well survey notes support content
+2. **Rationale**: Which parts of survey notes influenced response
+3. **Source References**: Specific quotes from survey notes
+4. **Missing Info**: Critical information not found in input
+
+**Rule enforcement transparency:**
+- `rule_enforcement` object shows which rules passed/failed
+- Violation details with severity levels (strict/warning/advisory)
+- `all_rules_passed` boolean for immediate compliance visibility
+- Immutable version tracking traces content evolution
+
+**Example:**
+```json
+{
+  "confidence_score": 0.85,
+  "rationale": "Based on survey notes indicating...",
+  "source_references": ["Quote: '...'"],
+  "missing_info": ["Budget details"],
+  "rule_enforcement": {
+    "passed": true,
+    "warnings": ["Could be more concise"]
+  }
+}
+```
+
+**Key Files:**
+- [`main.py`](packages/ai-service/main.py) - DraftSection model with metadata
+- [`rule_engine.py`](packages/ai-service/rule_engine.py) - Violation tracking
+- [`20260131000004_create_proposal_versions_table.ts`](packages/backend/src/db/migrations/20260131000004_create_proposal_versions_table.ts) - Version history
+
+**Design Principle:**
+> Every AI decision includes confidence scores, rationale, source references, and rule enforcement results. Transparency builds trust.
+
+---
+
+### Data Integrity
+
+**How to prevent AI pollution of historical data?**
+
+**Immutable version history via `proposal_versions` table:**
+- Every change creates new version record with complete snapshot
+- `proposals` table maintains `current_version` but never overwrites history
+- `UNIQUE(proposal_id, version_number)` prevents duplicates
+- Non-admins only see versions up to approved version
+
+**Four protection layers:**
+
+1. **Status-Based Access Control**: Non-admins can only edit `draft` or `rejected` status. Approved = read-only.
+
+2. **Export Restrictions**: Only approved proposals can be exported to Word documents.
+
+3. **AI Service Isolation**: AI service has **zero database access**—only generates content, returns via HTTP. Backend controls all persistence.
+
+4. **Transactional Writes**: If any step fails, entire transaction rolls back. No partial/corrupted data.
+
+**Data Protection Flow:**
+```
+User Input → Backend Validation → AI Generation → Rule Enforcement
+→ Backend Transaction (All or Nothing) → Database (Immutable Versions)
+```
+
+**Key Files:**
+- [`proposal.service.ts`](packages/backend/src/services/proposal.service.ts) - Transaction handling
+- [`20260131000004_create_proposal_versions_table.ts`](packages/backend/src/db/migrations/20260131000004_create_proposal_versions_table.ts) - Version schema
+- [`main.py`](packages/ai-service/main.py) - No database imports
+
+**Design Principle:**
+> Immutable versions, status-based access, transactional writes, and AI isolation protect data integrity through multiple defensive layers.
+
+---
+
+### Failure Modes
+
+**How should system behave when AI fails?**
+
+**Graceful degradation and human fallback:**
+
+**AI Service Unavailable:**
+- Backend catches error in `aiService.generateDraft()`
+- Transaction rolls back (no partial data)
+- Clear error message to user
+- Options: Retry | Manual Edit | Improve Input
+
+**Incomplete/Low-Confidence Output:**
+
+1. **Explicit Gap Identification**: `missing_info` array lists gaps
+2. **Confidence Signals**: `confidence_score` (0.0-1.0) signals uncertainty
+3. **Tiered Rule Enforcement**:
+   - Strict violations → `all_rules_passed: false` (blocks)
+   - Warning violations → logged but allows content
+   - Advisory violations → guidance without blocking
+4. **Multiple Recovery Options**:
+   - Regenerate via `regenerateProposal()`
+   - Manual edit via `updateProposal()`
+   - Retry with improved survey notes
+
+**Failure Flows:**
+```
+AI Unavailable → Error Caught → Transaction Rollback → User Notified
+→ Options: Retry | Manual Edit | Improve Input
+
+Low Confidence → Missing Info Populated → User Sees Warnings
+→ Options: Accept | Regenerate | Edit | Add More Notes
+```
+
+**Key Files:**
+- [`ai.service.ts`](packages/backend/src/services/ai.service.ts) - Error handling
+- [`proposal.service.ts`](packages/backend/src/services/proposal.service.ts) - Rollback, regeneration
+- [`main.py`](packages/ai-service/main.py) - Confidence/missing_info fields
+- [`rule_engine.py`](packages/ai-service/rule_engine.py) - Tiered severity
+
+**Design Principle:**
+> Clear errors, transaction rollbacks, confidence signals, tiered enforcement, and manual overrides ensure graceful degradation. Humans can always override AI.
+
+---
+
+## Governance Summary
+
+The AI Proposal Platform's governance model is built on four principles:
+
+1. **Human Authority**: AI suggests, humans decide—especially for approval, schema definition, and distribution
+2. **Transparent Explainability**: Every AI decision includes confidence scores, rationale, sources, and rule enforcement
+3. **Protected Data Integrity**: Immutable versions, status-based access, transactional writes, AI isolation
+4. **Graceful Failure Handling**: Clear errors, rollbacks, confidence signals, tiered enforcement, manual overrides
+
+These principles ensure the system augments human decision-making rather than replacing it, maintaining accountability and trust in AI-generated content.
+
+---
