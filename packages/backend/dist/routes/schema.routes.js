@@ -24,6 +24,95 @@ router.get('/debug-auth', (req, res) => {
     });
 });
 /**
+ * GET /api/schemas/sync-status
+ * Check if database schemas are synced with AI service
+ */
+router.get('/sync-status', async (req, res, next) => {
+    try {
+        // Get schemas from database
+        const dbSchemas = await (0, db_1.db)('schemas')
+            .where({ is_active: true })
+            .select('id', 'name', 'version');
+        // Get schemas from AI service
+        const aiSchemas = await ai_service_1.aiService.getSchemas();
+        const aiSchemaIds = new Set(aiSchemas.schemas.map((s) => s.id));
+        // Check sync status
+        const syncStatus = dbSchemas.map(schema => ({
+            id: schema.id,
+            name: schema.name,
+            version: schema.version,
+            synced: aiSchemaIds.has(schema.id),
+        }));
+        const allSynced = syncStatus.every(s => s.synced);
+        const unsyncedCount = syncStatus.filter(s => !s.synced).length;
+        res.json({
+            allSynced,
+            totalSchemas: dbSchemas.length,
+            syncedSchemas: dbSchemas.length - unsyncedCount,
+            unsyncedSchemas: unsyncedCount,
+            schemas: syncStatus,
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+/**
+ * POST /api/schemas/sync-all
+ * Manually sync all database schemas to AI service
+ * Useful for fixing schemas that were created before auto-sync was implemented
+ */
+router.post('/sync-all', async (req, res, next) => {
+    try {
+        // Get all active schemas from database
+        const schemas = await (0, db_1.db)('schemas')
+            .where({ is_active: true })
+            .select('*');
+        const results = [];
+        for (const schema of schemas) {
+            try {
+                const aiSchemaData = {
+                    id: schema.id,
+                    name: schema.name,
+                    version: schema.version,
+                    description: schema.description,
+                    created_by: schema.created_by,
+                    created_at: schema.created_at,
+                    sections: JSON.parse(schema.sections),
+                    global_rules: JSON.parse(schema.global_rules),
+                    metadata: {}
+                };
+                await ai_service_1.aiService.uploadSchema(aiSchemaData);
+                results.push({
+                    id: schema.id,
+                    name: schema.name,
+                    status: 'success',
+                });
+            }
+            catch (error) {
+                results.push({
+                    id: schema.id,
+                    name: schema.name,
+                    status: 'failed',
+                    error: error.message,
+                });
+            }
+        }
+        const successCount = results.filter(r => r.status === 'success').length;
+        const failedCount = results.filter(r => r.status === 'failed').length;
+        res.json({
+            message: `Synced ${successCount} schemas, ${failedCount} failed`,
+            totalSchemas: schemas.length,
+            successCount,
+            failedCount,
+            results,
+        });
+    }
+    catch (error) {
+        next(error);
+    }
+});
+/**
  * GET /api/schemas
  * List all schemas
  */
@@ -101,9 +190,9 @@ router.post('/', async (req, res, next) => {
         };
         await (0, db_1.db)('schemas').insert(schemaData);
         const schema = await (0, db_1.db)('schemas').where({ id: schemaId }).first();
-        // Upload to AI service
+        // Upload to AI service (CRITICAL: Must succeed for proposals to work)
         try {
-            await ai_service_1.aiService.uploadSchema({
+            const aiSchemaData = {
                 id: schema.id,
                 name: schema.name,
                 version: schema.version,
@@ -112,11 +201,16 @@ router.post('/', async (req, res, next) => {
                 created_at: schema.created_at,
                 sections: JSON.parse(schema.sections),
                 global_rules: JSON.parse(schema.global_rules),
-            });
+                metadata: {}
+            };
+            await ai_service_1.aiService.uploadSchema(aiSchemaData);
+            console.log(`✓ Schema ${schema.name} synced to AI service`);
         }
         catch (aiError) {
-            console.error('Failed to upload schema to AI service:', aiError);
-            // Continue even if AI service upload fails
+            console.error('Failed to upload schema to AI service:', aiError.message);
+            // Rollback database insert if AI service upload fails
+            await (0, db_1.db)('schemas').where({ id: schemaId }).delete();
+            throw new errorHandler_1.AppError(`Schema created in database but failed to sync with AI service: ${aiError.message}. Please try again.`, 500);
         }
         res.status(201).json({
             ...schema,
@@ -186,9 +280,9 @@ router.put('/:id', async (req, res, next) => {
             updated_at: new Date().toISOString(),
         });
         const updatedSchema = await (0, db_1.db)('schemas').where({ id: schemaId }).first();
-        // Upload to AI service
+        // Upload to AI service (CRITICAL: Must succeed for proposals to work)
         try {
-            await ai_service_1.aiService.uploadSchema({
+            const aiSchemaData = {
                 id: updatedSchema.id,
                 name: updatedSchema.name,
                 version: updatedSchema.version,
@@ -197,10 +291,14 @@ router.put('/:id', async (req, res, next) => {
                 created_at: updatedSchema.created_at,
                 sections: JSON.parse(updatedSchema.sections),
                 global_rules: JSON.parse(updatedSchema.global_rules),
-            });
+                metadata: {}
+            };
+            await ai_service_1.aiService.uploadSchema(aiSchemaData);
+            console.log(`✓ Schema ${updatedSchema.name} synced to AI service`);
         }
         catch (aiError) {
-            console.error('Failed to upload schema to AI service:', aiError);
+            console.error('Failed to upload schema to AI service:', aiError.message);
+            throw new errorHandler_1.AppError(`Schema updated in database but failed to sync with AI service: ${aiError.message}. The schema may not work for proposals until synced.`, 500);
         }
         res.json({
             ...updatedSchema,
