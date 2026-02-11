@@ -70,54 +70,7 @@ class SchemaManager:
     def __init__(self):
         self.schemas: Dict[str, ProposalSchema] = {}
         self.active_schema_id: Optional[str] = None
-        self._last_fetch_time: float = 0
-        self._fetch_interval: float = 300  # Refresh every 5 minutes
         logger.info("Schema Manager initialized")
-    
-    async def ensure_schemas_loaded(self):
-        """
-        Ensure schemas are loaded, fetching from backend if needed.
-        This is called before every proposal generation to handle Vercel cold starts.
-        """
-        import time
-        current_time = time.time()
-        
-        # If schemas are empty or cache is stale, fetch from backend
-        if not self.schemas or (current_time - self._last_fetch_time) > self._fetch_interval:
-            await self._fetch_schemas_from_backend()
-            self._last_fetch_time = current_time
-    
-    async def _fetch_schemas_from_backend(self):
-        """Fetch all schemas from backend and load them"""
-        try:
-            import httpx
-            import os
-            
-            backend_url = os.getenv("BACKEND_URL", "http://localhost:3001")
-            logger.info(f"Fetching schemas from backend: {backend_url}")
-            
-            async with httpx.AsyncClient(timeout=10.0) as client:
-                response = await client.get(f"{backend_url}/api/schemas")
-                if response.status_code == 200:
-                    schemas = response.json()
-                    logger.info(f"Found {len(schemas)} schemas in backend")
-                    
-                    for schema in schemas:
-                        try:
-                            self.load_schema(schema)
-                            logger.info(f"Loaded schema: {schema['name']}")
-                        except Exception as e:
-                            logger.error(f"Failed to load schema {schema.get('name')}: {str(e)}")
-                    
-                    # Activate first schema if none is active
-                    if not self.active_schema_id and len(schemas) > 0:
-                        self.set_active_schema(schemas[0]['id'])
-                        logger.info(f"Activated schema: {schemas[0]['name']}")
-                else:
-                    logger.warning(f"Failed to fetch schemas from backend: {response.status_code}")
-        except Exception as e:
-            logger.error(f"Error fetching schemas from backend: {str(e)}")
-            # Don't raise - fall back to existing schemas or default
     
     def load_schema(self, schema_data: Dict[str, Any]) -> ProposalSchema:
         """
