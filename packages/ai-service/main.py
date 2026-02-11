@@ -187,10 +187,11 @@ async def generate_draft(request: DraftGenerationRequest):
     Generate proposal draft using schema-defined sections and enforced rules.
     
     Process:
-    1. Load schema with sections and rules
-    2. Generate content for each section using LLM
-    3. ENFORCE rules on generated content
-    4. Return draft with rule enforcement results
+    1. Ensure schemas are loaded (handles Vercel cold starts)
+    2. Load schema with sections and rules
+    3. Generate content for each section using LLM
+    4. ENFORCE rules on generated content
+    5. Return draft with rule enforcement results
     
     Args:
         request: Draft generation request with REAL survey notes and schema ID
@@ -209,6 +210,10 @@ async def generate_draft(request: DraftGenerationRequest):
     })
     
     try:
+        # CRITICAL: Ensure schemas are loaded before processing
+        # This handles Vercel cold starts where in-memory data is lost
+        await schema_manager.ensure_schemas_loaded()
+        
         # Validate survey notes
         if not request.survey_notes.strip():
             raise HTTPException(
