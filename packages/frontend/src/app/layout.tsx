@@ -1,27 +1,21 @@
-'use client';
-
-import { usePathname } from 'next/navigation';
 import { Toaster } from 'react-hot-toast';
-import { AdminAuthProvider } from '@/contexts/AdminAuthContext';
-import { UserAuthProvider } from '@/contexts/UserAuthContext';
+import { Providers } from './providers';
 import './globals.css';
+
+export const metadata = {
+  title: 'AI-Assisted Proposal Platform',
+  description: 'Create and manage proposals with AI assistance',
+};
 
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-  const isAdminRoute = pathname?.startsWith('/admin');
-
   return (
     <html lang="en">
       <body>
-        {isAdminRoute ? (
-          <AdminAuthProvider>{children}</AdminAuthProvider>
-        ) : (
-          <UserAuthProvider>{children}</UserAuthProvider>
-        )}
+        <Providers>{children}</Providers>
         <Toaster />
       </body>
     </html>
